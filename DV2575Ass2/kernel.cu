@@ -7,15 +7,17 @@
 #include <time.h>
 #include <math.h>
 
-void InitMatrix(float** matrix, int size);
+void InitMatrix(float*** matrix, float** variables, int size);
 void Backropagate(float** matrix, int size);
-void ForwardSubstitute(float** matrix, int size, float* variables);
+void ForwardSubstitute(float** matrix, float* variablesint, int size);
 
 int main()
 {
 	float** matrix = 0;
-	int size = 100;
-	InitMatrix(matrix, size);
+	float* variables = 0;
+	int size = 2;
+	InitMatrix(&matrix, &variables, size);
+
 Error:
 	for (int i = 0; i < size; ++i)
 		free(matrix[i]);
@@ -23,18 +25,23 @@ Error:
     return 0;
 }
 
-void InitMatrix(float** matrix, int size)
+void InitMatrix(float*** matrix, float** variables, int size)
 {
 	srand(time(NULL));
-	matrix = (float**)malloc(size * sizeof(float*));
+	//malloc number of rows
+	*matrix = (float**)malloc(size * sizeof(float*));
 	for (int i = 0; i < size; ++i)
 	{
-		matrix[i] = (float*)malloc((size + 1) * sizeof(float));
+		//malloc a row
+		(*matrix)[i] = (float*)malloc((size + 1) * sizeof(float));
+		//fill row
 		for (int j = 0; j < (size + 1); ++j)
 		{
-			matrix[i][j] = (float)(rand() % 10 + 1); //not allowing zeros b/c easier
+			(*matrix)[i][j] = (float)(rand() % 10 + 1); //not allowing zeros b/c easier
 		}
 	}
+	//malloc variables (x,y,z etc.)
+	*variables = (float*)malloc(size * sizeof(float*));
 }
 
 void Backropagate(float** matrix, int size)
