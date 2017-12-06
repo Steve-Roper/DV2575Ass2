@@ -8,6 +8,7 @@
 #include <math.h>
 
 void InitMatrix(int** matrix, int size);
+void Backropagate(int** matrix, int size);
 
 int main()
 {
@@ -31,6 +32,19 @@ void InitMatrix(int** matrix, int size)
 		for (int j = 0; j < (size + 1); ++j)
 		{
 			matrix[i][j] = rand() % 10 + 1; //not allowing zeros b/c easier
+		}
+	}
+}
+
+void Backropagate(int** matrix, int size)
+{
+	for (int i = 1; i < size; ++i)
+	{
+		float ratio = (float)matrix[i][i - 1] / (float)matrix[i - 1][i - 1];
+		for (int j = 0; j < size + 1; ++j)
+		{
+			int subtrahend = (int)round(ratio * matrix[i - 1][j]);
+			matrix[i][j] -= subtrahend;
 		}
 	}
 }
