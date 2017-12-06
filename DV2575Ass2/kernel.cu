@@ -9,6 +9,7 @@
 
 void InitMatrix(int** matrix, int size);
 void Backropagate(int** matrix, int size);
+void ForwardSubstitute(int** matrix, int size);
 
 int main()
 {
@@ -46,5 +47,18 @@ void Backropagate(int** matrix, int size)
 			int subtrahend = (int)round(ratio * matrix[i - 1][j]);
 			matrix[i][j] -= subtrahend;
 		}
+	}
+}
+
+void ForwardSubstitute(int** matrix, int size, float* variables)
+{
+	for (int i = size; i > -1; --i)
+	{
+		//variables here would usually be x,y,z etc. as in a1x + b1y + c1z = s1
+		//												   a2x + b2y + c2z = s2
+		//												   a3x + b3y + c3z = s3
+		variables[i] = (float)matrix[i][size + 1] / (float)matrix[i][i];
+		matrix[i][size + 1] -= (int)round(matrix[i][i] * variables[i]);
+		matrix[i][i] = 0;
 	}
 }
