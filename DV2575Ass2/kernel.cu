@@ -9,7 +9,7 @@
 
 void InitMatrix(int** matrix, int size);
 void Backropagate(int** matrix, int size);
-void ForwardSubstitute(int** matrix, int size);
+void ForwardSubstitute(int** matrix, int size, float* variables);
 
 int main()
 {
