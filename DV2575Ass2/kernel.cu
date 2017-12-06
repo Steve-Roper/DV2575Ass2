@@ -9,19 +9,31 @@
 
 void InitMatrix(float*** matrix, float** variables, int size);
 void Backropagate(float** matrix, int size);
-void ForwardSubstitute(float** matrix, float* variablesint, int size);
+void ForwardSubstitute(float** matrix, float* variables, int size);
 
 int main()
 {
 	float** matrix = 0;
 	float* variables = 0;
-	int size = 2;
+	int size = 4;
+	//CPU Gaussian elimination
 	InitMatrix(&matrix, &variables, size);
+	Backropagate(matrix, size);
+	ForwardSubstitute(matrix, variables, size);
+	for (int i = 0; i < size; ++i)
+	{
+		printf("%f\n", variables[i]);
+	}
+	printf("\n");
 
+	//GPU Gaussian elimination
+
+	system("PAUSE");
 Error:
 	for (int i = 0; i < size; ++i)
 		free(matrix[i]);
 	free(matrix);
+	free(variables);
     return 0;
 }
 
@@ -48,16 +60,19 @@ void Backropagate(float** matrix, int size)
 {
 	for (int i = 1; i < size; ++i)
 	{
-		//Calculate ratio between rows, so one can be reduced to 0
-		float ratio = (float)matrix[i][i - 1] / (float)matrix[i - 1][i - 1];
-		for (int j = 0; j < size + 1; ++j)
+		for (int j = i; j < size; ++j)
 		{
-			matrix[i][j] -= (ratio * matrix[i - 1][j]);
+			//Calculate ratio between rows, so one can be reduced to 0
+			float ratio = (float)matrix[j][i - 1] / (float)matrix[i - 1][i - 1];
+			for (int k = 0; k < (size + 1); ++k)
+			{
+				matrix[j][k] -= (ratio * matrix[i - 1][k]);
+			}
 		}
 	}
 }
 
-void ForwardSubstitute(float** matrix, int size, float* variables)
+void ForwardSubstitute(float** matrix, float* variables, int size)
 {
 	for (int i = (size - 1); i > 0; --i)
 	{
@@ -65,7 +80,7 @@ void ForwardSubstitute(float** matrix, int size, float* variables)
 		//												   a2x + b2y + c2z = s2
 		//												   a3x + b3y + c3z = s3
 		variables[i] = matrix[i][size] / matrix[i][i];
-		for (int j = i - 1; j > -1; ++j)
+		for (int j = i - 1; j > -1; --j)
 		{
 			//Subtract from the rightmost element
 			matrix[j][size] -= matrix[j][i] * variables[i];
