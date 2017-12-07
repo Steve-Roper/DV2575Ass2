@@ -7,53 +7,80 @@
 #include <time.h>
 #include <math.h>
 
-void InitMatrix(float*** matrix, float** variables, int size);
+void InitMatrices(float*** matrix, float** variables, int size);
 void Backropagate(float** matrix, int size);
 void ForwardSubstitute(float** matrix, float* variables, int size);
 
 int main()
 {
-	float** matrix = 0;
-	float* variables = 0;
-	int size = 4;
-	//CPU Gaussian elimination
-	InitMatrix(&matrix, &variables, size);
-	Backropagate(matrix, size);
-	ForwardSubstitute(matrix, variables, size);
+	//Number of Rows/Columns
+	const int size = 4;
+
+	//CPU data
+	float** cMatrix		= 0;
+	float* cVariables	= 0;	
+	
+	//GPU data
+	float** hMatrix		= 0;
+	float** dMatrix		= 0;
+	float* hVariables	= 0;
+	float* dVariables	= 0;
+
+	//0 CPU, 1 HGPU, 2 DGPU
+	float*** matrices = (float***)malloc(3 * sizeof(float**));//[3] = { cMatrix, hMatrix, dMatrix };
+	float** variables = (float**)malloc(3 * sizeof(float*));//[3] = { cVariables, hVariables, dVariables };
+
+	//Init matrices and variable storage
+	InitMatrices(matrices, variables, size);
 	for (int i = 0; i < size; ++i)
 	{
-		printf("%f\n", variables[i]);
+		for (int j = 0; j < (size + 1); ++j)
+		{
+			printf("%f\t", matrices[0][i][j]);
+		}
+		printf("\n");
 	}
 	printf("\n");
-
-	//GPU Gaussian elimination
+	Backropagate(matrices[0], size);
+	ForwardSubstitute(matrices[0], variables[0], size);
+	for (int i = 0; i < size; ++i)
+	{
+		printf("%f\n", variables[0][i]);
+	}
+	printf("\n");
 
 	system("PAUSE");
 Error:
 	for (int i = 0; i < size; ++i)
-		free(matrix[i]);
-	free(matrix);
+		for (int j = 0; j < 2; ++j)
+			free(matrices[j][i]);
+	for (int i = 0; i < 2; ++i)
+		free(matrices[i]);
+	free(matrices);
 	free(variables);
     return 0;
 }
 
-void InitMatrix(float*** matrix, float** variables, int size)
+void InitMatrices(float*** matrix, float** variables, int size)
 {
 	srand(time(NULL));
 	//malloc number of rows
-	*matrix = (float**)malloc(size * sizeof(float*));
+	matrix[0] = (float**)malloc(size * sizeof(float*));
+	matrix[1] = (float**)malloc(size * sizeof(float*));
 	for (int i = 0; i < size; ++i)
 	{
 		//malloc a row
-		(*matrix)[i] = (float*)malloc((size + 1) * sizeof(float));
+		matrix[0][i] = (float*)malloc((size + 1) * sizeof(float));
+		matrix[1][i] = (float*)malloc((size + 1) * sizeof(float));
 		//fill row
 		for (int j = 0; j < (size + 1); ++j)
 		{
-			(*matrix)[i][j] = (float)(rand() % 10 + 1); //not allowing zeros b/c easier
+			matrix[0][i][j] = matrix[1][i][j] = (float)(rand() % 10 + 1); //not allowing zeros b/c easier
 		}
 	}
 	//malloc variables (x,y,z etc.)
-	*variables = (float*)malloc(size * sizeof(float*));
+	variables[0] = (float*)malloc(size * sizeof(float*));
+	variables[1] = (float*)malloc(size * sizeof(float*));
 }
 
 void Backropagate(float** matrix, int size)
