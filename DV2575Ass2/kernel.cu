@@ -10,6 +10,9 @@
 void InitMatrices(float*** matrix, float** variables, int size);
 void Backropagate(float** matrix, int size);
 void ForwardSubstitute(float** matrix, float* variables, int size);
+__global__ void Gaussian(float*** matrix, int* size);
+__device__ void Backpropagate();
+__device__ void ForwardSubstitute();
 
 int main()
 {
@@ -85,18 +88,7 @@ void InitMatrices(float*** matrix, float** variables, int size)
 
 void Backropagate(float** matrix, int size)
 {
-	for (int i = 1; i < size; ++i)
-	{
-		for (int j = i; j < size; ++j)
-		{
-			//Calculate ratio between rows, so one can be reduced to 0
-			float ratio = (float)matrix[j][i - 1] / (float)matrix[i - 1][i - 1];
-			for (int k = 0; k < (size + 1); ++k)
-			{
-				matrix[j][k] -= (ratio * matrix[i - 1][k]);
-			}
-		}
-	}
+	
 }
 
 void ForwardSubstitute(float** matrix, float* variables, int size)
@@ -116,4 +108,22 @@ void ForwardSubstitute(float** matrix, float* variables, int size)
 		}
 	}
 	variables[0] = matrix[0][size] / matrix[0][0];
+}
+
+__global__ void Gaussian(float*** matrix, int* size)
+{
+	int index = threadIdx.x + blockIdx.x * blockDim.x;
+
+	//parallellize over k in Backpropagate
+
+	for (int i = 1; i < *size; ++i)
+	{
+		for (int j = i; j < *size; ++j)
+		{
+			//Calculate ratio between rows, so one can be reduced to 0
+			float ratio = (float)(*matrix)[j][i - 1] / (float)(*matrix)[i - 1][i - 1];
+			(*matrix)[j][index] -= (ratio * (*matrix)[i - 1][index]);
+		}
+	}
+}
 }
