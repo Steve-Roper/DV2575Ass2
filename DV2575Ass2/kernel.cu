@@ -9,9 +9,9 @@
 
 #define uint unsigned int
 
-cudaError_t InitMatrices(double** matrix, double** variables, int size);
+cudaError_t InitMatrices(double** matrix, int size);
 void ForwardElimination(double* matrix, int size);
-void BackwardSubstitute(double* matrix, double* variables, int size);
+void BackwardSubstitute(double* matrix, int size);
 __global__ void Gaussian(double*** matrix, int* size);
 __global__ void ForwardElimination();
 __global__ void BackwardSubstitute();
@@ -22,10 +22,9 @@ int main()
 	const int size		= 4;
 	//0 CPU, 1 HGPU, 2 DGPU
 	double** matrices	= (double**)malloc(3 * sizeof(double*));
-	double** variables	= (double**)malloc(3 * sizeof(double*));
 
 	//Init matrices and variable storage
-	if (InitMatrices(matrices, variables, size) != cudaSuccess)
+	if (InitMatrices(matrices, size) != cudaSuccess)
 	{
 		goto Error;
 	}
@@ -39,28 +38,11 @@ int main()
 	}
 	printf("\n");
 	ForwardElimination(matrices[0], size);
+	BackwardSubstitute(matrices[0],  size);
+	for (int i = 0; i < size; ++i)
 	for (int i = 0; i < size; ++i)
 	{
-		for (int j = 0; j < (size + 1); ++j)
-		{
-			printf("%f\t", matrices[0][i * (size + 1) + j]);
-		}
-		printf("\n");
-	}
-	printf("\n");
-	BackwardSubstitute(matrices[0], variables[0], size);
-	for (int i = 0; i < size; ++i)
-	{
-		for (int j = 0; j < (size + 1); ++j)
-		{
-			printf("%f\t", matrices[0][i * (size + 1) + j]);
-		}
-		printf("\n");
-	}
-	printf("\n");
-	for (int i = 0; i < size; ++i)
-	{
-		printf("%f\n", variables[0][i]);
+		printf("%f\n", matrices[0][i * (size + 1) + size]);
 	}
 	printf("\n");
 
@@ -69,11 +51,10 @@ Error:
 	for (int i = 0; i < 2; ++i)
 		free(matrices[i]);
 	free(matrices);
-	free(variables);
     return 0;
 }
 
-cudaError_t InitMatrices(double** matrix, double** variables, int size)
+cudaError_t InitMatrices(double** matrix, int size)
 {
 	srand((uint)time(NULL));
 	//malloc number of rows
@@ -98,9 +79,6 @@ cudaError_t InitMatrices(double** matrix, double** variables, int size)
 	{
 		cudaStatus = cudaMemcpy(matrix[2], matrix[0], (size + 1) * sizeof(double), cudaMemcpyHostToDevice);
 	}
-	//malloc variables (x,y,z etc.)
-	variables[0] = (double*)malloc(size * sizeof(double*));
-	variables[1] = (double*)malloc(size * sizeof(double*));
 
 	return cudaStatus;
 }
@@ -121,24 +99,25 @@ void ForwardElimination(double* matrix, int size)
 	}
 }
 
-void BackwardSubstitute(double* matrix, double* variables, int size)
+void BackwardSubstitute(double* matrix, int size)
 {
 	for (int i = (size - 1); i > 0; --i)
 	{
 		//variables here would usually be x,y,z etc. as in a1x + b1y + c1z = s1
 		//												   a2x + b2y + c2z = s2
 		//												   a3x + b3y + c3z = s3
-		variables[i] = matrix[i * (size + 1) + size] / matrix[i * (size + 1) + i];
+		matrix[i * (size + 1) + size] = matrix[i * (size + 1) + size] / matrix[i * (size + 1) + i];
 		for (int j = i - 1; j > -1; --j)
 		{
 			//Subtract from the rightmost element
-			matrix[j * (size + 1) + size] -= matrix[j * (size + 1) + i] * variables[i];
+			matrix[j * (size + 1) + size] -= matrix[j * (size + 1) + i] * matrix[i * (size + 1) + size];
 			//Eliminate element above
 			matrix[j * (size + 1) + i] = 0;
 		}
 		matrix[i * (size + 1) + i] = 1.f;
 	}
-	variables[0] = matrix[size] / matrix[0];
+	matrix[size] = matrix[size] / matrix[0];
+	matrix[0] = 1.f;
 }
 
 __global__ void ForwardElimination(double** matrix, int* size)
