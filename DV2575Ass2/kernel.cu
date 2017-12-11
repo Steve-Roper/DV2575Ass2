@@ -9,8 +9,12 @@
 
 #define uint unsigned int
 
+#ifdef __INTELLISENSE__
+void _syncthreads();
+#endif // __INTELLISENSE__
+
 void InitCPUData(double** matrix, int size);
-cudaError_t InitGPUData(double** matrix, int *dSize ,int size);
+cudaError_t InitGPUData(double** matrix, int **dSize, int size);
 cudaError_t TransferGPUData(double** matrix, int size, cudaMemcpyKind flag);
 
 void ForwardElimination(double* matrix, int size);
@@ -24,13 +28,13 @@ int main()
 	dim3 grid_dim = dim3(1, 1, 1);
 	dim3 block_dim = dim3(1024, 1, 1);
 	
-	const int size		= 4;										//Number of Rows/Columns, number of elements = size^2 + size
+	int size			= 4;										//Number of Rows/Columns, number of elements = size^2 + size
 	int *dSize			= 0;
 	double** matrices	= (double**)malloc(3 * sizeof(double*));	//0 CPU, 1 HGPU, 2 DGPU
 
 	//Init matrices and variable storage
 	InitCPUData(matrices, size);
-	if (InitGPUData(matrices, dSize, size) != cudaSuccess)
+	if (InitGPUData(matrices, &dSize, size) != cudaSuccess)
 	{
 		goto Error;
 	}
@@ -109,19 +113,19 @@ void InitCPUData(double** matrix, int size)
 	}
 }
 
-cudaError_t InitGPUData(double** matrices, int *dSize, int size)
+cudaError_t InitGPUData(double** matrices, int **dSize, int size)
 {
 	cudaError_t cudaStatus;
-	cudaStatus = cudaMalloc(&matrices[2], size * (size + 1) * sizeof(double*));
+	cudaStatus = cudaMalloc((void**)&matrices[2], size * (size + 1) * sizeof(double*));
 	if (cudaStatus == cudaSuccess)
 	{
 		cudaStatus = TransferGPUData(matrices, size, cudaMemcpyHostToDevice);
 		if (cudaStatus == cudaSuccess)
 		{
-			cudaStatus = cudaMalloc(&dSize, sizeof(int));
+			cudaStatus = cudaMalloc((void**)dSize, sizeof(int)); //double void pointer super imoprtant
 			if (cudaStatus == cudaSuccess)
 			{
-				cudaStatus = cudaMemcpy(dSize, &size, sizeof(int), cudaMemcpyHostToDevice); //maybe move this to TransferGPUData?
+				cudaStatus = cudaMemcpy((void*)*dSize, &size, sizeof(int), cudaMemcpyHostToDevice); //maybe move this to TransferGPUData?
 				if (cudaStatus != cudaSuccess)
 				{
 					printf("\nCould not copy size variable from host to device\n");
@@ -195,11 +199,9 @@ void BackwardSubstitute(double* matrix, int size)
 
 __global__ void ForwardElimination(double** matrix, int* size)
 {
-	int index = threadIdx.x + blockIdx.x * blockDim.x;
-	if (!index)
-	{
-		printf("\n\nSomething's happening!\n\n");
-	}
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+	//int index = threadIdx.x + blockIdx.x * blockDim.x;
+
 	//parallellize over k in ForwardElimination
 	for (int i = 1; i < *size; ++i)
 	{
@@ -208,6 +210,7 @@ __global__ void ForwardElimination(double** matrix, int* size)
 			//Calculate ratio between rows, so one can be reduced to 0
 			double ratio = (double)(*matrix)[j * (*size + 1) + i - 1] / (double)(*matrix)[(i - 1) * (*size + 1) + i - 1];
 			(*matrix)[j * (*size + 1) + index] -= (ratio * (*matrix)[(i - 1) * (*size + 1) + index]);
+			_syncthreads();
 		}
 	}
 }
