@@ -15,6 +15,7 @@ void __syncthreads();
 #endif // __INTELLISENSE__
 
 void InitCPUData(double** matrices, int size);
+void FillHostMatrix(double** matrices, int size);
 cudaError_t InitGPUData(double** matrices, int **dSize, int size, int **dStride, int stride);
 cudaError_t TransferGPUData(double** matrices, int size, cudaMemcpyKind flag);
 
@@ -25,61 +26,103 @@ __global__ void ForwardEliminationColumn(double* matrix, int* size, int* row, in
 
 int main()
 {
-	int stride			= 4;										//Number of columns handled by each thread
+	int stride			= 1;										//Number of columns handled by each thread
 	int *dStride		= 0;
-	dim3 grid_dim		= dim3(1, 1, 1);
-	dim3 block_dim		= dim3(16, 1, 1);
+	dim3 grid_dim		= dim3(10, 1, 1);
+	dim3 block_dim		= dim3(1024, 1, 1);
 
-	int size			= 10;										//Number of Rows/Columns, number of elements = size^2 + size
-	int *dSize			= 0;
 	double** matrices	= (double**)malloc(3 * sizeof(double*));	//0 CPU, 1 HGPU, 2 DGPU
+	int size = 64;
+	int *dSize = 0;
 
-	//Init matrices and variable storage
-	InitCPUData(matrices, size);
-	if (InitGPUData(matrices, &dSize, size, &dStride, stride) != cudaSuccess)
+	for (size; size < 2049; size *= 2) //64, 128, 256, 512, 1024, 2048. Number of Rows/Columns, number of elements = size^2 + size
 	{
-		goto Error;
-	}
-
-	ForwardElimination(matrices[0], size);
-	//KERNEL CALL 1, Forward elimination
-	int* dRow = 0;
-	cudaMalloc((void**)&dRow, sizeof(int));
-	for (int i = 1; i < size; ++i)
-	{
-		cudaMemcpy(dRow, &i, sizeof(int), cudaMemcpyHostToDevice);
-		ForwardEliminationColumn<<<grid_dim, block_dim>>>(matrices[2], dSize, dRow, dStride);
-	}
-	TransferGPUData(matrices, size, cudaMemcpyDeviceToHost);
-
-	BackwardSubstitute(matrices[0], size);
-	BackwardSubstitute(matrices[1], size);
-	bool failed = false;
-
-	for (int i = 0; i < size; ++i)
-	{
-		if (matrices[0][size] != matrices[1][size])
+		FILE *csv;
+		csv = fopen("DV2575Ass2Times.csv", "a");
+		fprintf(csv, "\nCPU,1,2,4,8\n");
+		fclose(csv);
+		double GPUTimes[50] = { 0.f };
+		double CPUTimes[10] = { 0.f };
+		for (int rep = 0; rep < 10; ++rep)
 		{
-			failed = true;
-			break;
+			stride = 1;
+			//Init matrices and variable storage
+			InitCPUData(matrices, size);
+
+			timespec before;
+			timespec after;
+			
+			bool failed = false;
+			for (stride; stride < 10; stride *= 2) //1, 2, 4, 8
+			{
+				//KERNEL CALL 1, Forward elimination
+				int* dRow = 0;
+				timespec_get(&before, TIME_UTC);
+				cudaMalloc((void**)&dRow, sizeof(int));
+				if (InitGPUData(matrices, &dSize, size, &dStride, stride) != cudaSuccess)
+				{
+					goto Error;
+				}
+				for (int i = 1; i < size; ++i)
+				{
+					cudaMemcpy(dRow, &i, sizeof(int), cudaMemcpyHostToDevice);
+					ForwardEliminationColumn<<<grid_dim, block_dim>>>(matrices[2], dSize, dRow, dStride);
+				}
+				TransferGPUData(matrices, size, cudaMemcpyDeviceToHost);
+				timespec_get(&after, TIME_UTC);
+				double timeTakenSec = after.tv_sec - before.tv_sec;
+				long long timeTakenNsec = after.tv_nsec - before.tv_nsec;
+				long long timeTakenMsec = round(timeTakenNsec / 1000000.f);
+				timeTakenSec += (double)timeTakenMsec / 1000.f;
+				int timeArrayPos = (stride / 2) * 10 + rep;
+				GPUTimes[timeArrayPos] = timeTakenSec;
+
+				BackwardSubstitute(matrices[0], size);
+				BackwardSubstitute(matrices[1], size);
+		
+				printf("Good result\n");
+				/*for (int i = 1; i < (size + 1); ++i)
+					printf("%f\t", matrices[1][i * size + i - 1]);*/
+			Error:
+				cudaFree(matrices[2]);
+				cudaFree(dSize);
+				cudaFree(dRow);
+				cudaFree(dStride);
+
+				FillHostMatrix(matrices, size);
+			}
+
+			timespec_get(&before, TIME_UTC);
+			ForwardElimination(matrices[0], size);
+			timespec_get(&after, TIME_UTC);
+			double timeTakenSec = after.tv_sec - before.tv_sec;
+			long long timeTakenNsec = after.tv_nsec - before.tv_nsec;
+			long long timeTakenMsec = round(timeTakenNsec / 1000000.f);
+			timeTakenSec += (double)timeTakenMsec / 1000.f;
+			CPUTimes[rep] = timeTakenSec;
 		}
+
+
+		free(matrices[0]);
+		free(matrices[1]);
+		/*printf("Writing size %d to DV2575Ass2Times.csv\n", size);
+		csv = fopen("DV2575Ass2Times.csv", "a");
+		for (int j = 0; j < 10; ++j)
+		{
+			fprintf(csv, "%f,", CPUTimes[j]);
+			for (int i = 0; i < 5; ++i)
+			{
+				if (i == 3)
+				{
+					++i;
+				}
+				fprintf(csv, "%f,", GPUTimes[i * 10 + j]);
+			}
+			fprintf(csv, "\n");
+		}
+		fclose(csv);*/
 	}
-	if(failed)
-		printf("Bad result\n");
-	else
-	{
-		printf("Good result\n");
-		/*for (int i = 1; i < (size + 1); ++i)
-			printf("%f\t", matrices[1][i * size + i - 1]);*/
-	}
-	printf("\n");
-Error:
-	free(matrices[0]);
-	free(matrices[1]);
-	cudaFree(matrices[2]);
 	free(matrices);
-	cudaFree(dSize);
-	cudaFree(dRow);
 	system("PAUSE");
 	return 0;
 }
@@ -90,13 +133,24 @@ void InitCPUData(double** matrices, int size)
 	//malloc number of rows
 	matrices[0] = (double*)malloc(size * (size + 1) * sizeof(double*));
 	matrices[1] = (double*)malloc(size * (size + 1) * sizeof(double*));
-
+	
 	for (int i = 0; i < size; ++i)
 	{
 		//fill row
 		for (int j = 0; j < (size + 1); ++j)
 		{
-			matrices[0][i * (size + 1) + j] = matrices[1][i * (size + 1) + j] = (double)(rand() % 10 + 1); //not allowing zeros b/c easie
+			matrices[0][i * (size + 1) + j] = matrices[1][i * (size + 1) + j] = (double)(rand() % 10 + 1); //not allowing zeros b/c easier
+		}
+	}
+}
+
+void FillHostMatrix(double** matrices, int size)
+{
+	for (int i = 0; i < size; ++i)
+	{
+		for (int j = 0; j < (size + 1); ++j)
+		{
+			matrices[1][i * (size + 1) + j] = matrices[0][i * (size + 1) + j];
 		}
 	}
 }
@@ -215,7 +269,6 @@ __global__ void ForwardEliminationColumn(double* matrix, int* size, int* row, in
 			if (column + j < (_size + 1))
 			{
 				//Calculate ratio between rows, so one can be reduced to 0
-				//double ratio = (double)matrix[i * (_size + 1) + _row - 1] / (double)matrix[(_row - 1) * (_size + 1) + _row - 1 + j];
 				matrix[i * (_size + 1) + column + j] -= (ratio * matrix[(_row - 1) * (_size + 1) + column + j]);
 				__syncthreads();
 			}
