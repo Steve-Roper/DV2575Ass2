@@ -17,7 +17,7 @@ void __syncthreads();
 void InitCPUData(double** matrices, int size);
 void FillHostMatrix(double** matrices, int size);
 cudaError_t InitGPUData(double** matrices, int **dSize, int size, int **dStride, int stride);
-cudaError_t TransferGPUData(double** matrices, int size, cudaMemcpyKind flag);
+cudaError_t CudaMemcpyMatrix(double** matrices, int size, cudaMemcpyKind flag);
 
 void ForwardElimination(double* matrix, int size);
 void BackwardSubstitute(double* matrix, int size);
@@ -72,7 +72,8 @@ int main()
 				timespec_get(&before, TIME_UTC);
 				cudaMalloc((void**)&dRow, sizeof(int));
 				cudaMalloc((void**)&dPivotRow, sizeof(int));
-				if (InitGPUData(matrices, &dSize, size, &dStride, totalStride) != cudaSuccess)
+				cudaError_t cudaStatus = InitGPUData(matrices, &dSize, size, &dStride, totalStride);
+				if (cudaStatus != cudaSuccess)
 				{
 					goto Error;
 				}
@@ -85,7 +86,7 @@ int main()
 						ForwardEliminationColumn << <grid_dim, block_dim >> >(matrices[2], dSize, dRow, dStride, dPivotRow);
 					}
 				}
-				TransferGPUData(matrices, size, cudaMemcpyDeviceToHost);
+				CudaMemcpyMatrix(matrices, size, cudaMemcpyDeviceToHost);
 				
 				timespec_get(&after, TIME_UTC);
 				double timeTakenSec = after.tv_sec - before.tv_sec;
@@ -129,7 +130,7 @@ int main()
 
 		free(matrices[0]);
 		free(matrices[1]);
-		if (!failed)
+		/*if (!failed)
 		{
 			printf("Writing size %d to DV2575Ass2Times.csv\n", size);
 			csv = fopen("DV2575Ass2Times.csv", "a");
@@ -147,7 +148,7 @@ int main()
 				fprintf(csv, "\n");
 			}
 			fclose(csv);
-		}
+		}*/
 	}
 	free(matrices);
 	system("PAUSE");
@@ -186,54 +187,52 @@ void FillHostMatrix(double** matrices, int size)
 cudaError_t InitGPUData(double** matrices, int **dSize, int size, int **dStride, int stride)
 {
 	cudaError_t cudaStatus;
+
 	cudaStatus = cudaMalloc((void**)&matrices[2], size * (size + 1) * sizeof(double*));
-	if (cudaStatus == cudaSuccess)
-	{
-		cudaStatus = TransferGPUData(matrices, size, cudaMemcpyHostToDevice);
-		if (cudaStatus == cudaSuccess)
-		{
-			cudaStatus = cudaMalloc((void**)dSize, sizeof(int)); //double void pointer super imoprtant
-			if (cudaStatus == cudaSuccess)
-			{
-				cudaStatus = cudaMemcpy((void*)*dSize, &size, sizeof(int), cudaMemcpyHostToDevice); //maybe move this to TransferGPUData?
-				if (cudaStatus == cudaSuccess)
-				{
-					cudaStatus = cudaMalloc((void**)dStride, sizeof(int));
-					if (cudaStatus == cudaSuccess)
-					{
-						cudaStatus = cudaMemcpy((void*)*dStride, &stride, sizeof(int), cudaMemcpyHostToDevice);
-						if (cudaStatus != cudaSuccess)
-						{
-							printf("\nCould not copy stride variable from host to device\n");
-						}
-					}
-					else
-					{
-						printf("\nCould not allocate device memory for thread stride\n");
-					}
-				}
-				else
-				{
-					printf("\nCould not copy size variable from host to device\n");
-				}
-			}
-			else
-			{
-				printf("\nCould not allocate device memory for matrix size\n");
-			}
-		}
-	}
-	else
+	if (cudaStatus != cudaSuccess)
 	{
 		printf("\nCould not allocate device memory for matrix\n");
+		return cudaStatus;
 	}
 
+	cudaStatus = CudaMemcpyMatrix(matrices, size, cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess)
+	{
+		return cudaStatus;
+	}
 
-Error:
+	cudaStatus = cudaMalloc((void**)dSize, sizeof(int)); //double void pointer super imoprtant
+	if (cudaStatus != cudaSuccess)
+	{
+		printf("\nCould not allocate device memory for matrix size\n");
+		return cudaStatus;
+	}
+
+	cudaStatus = cudaMemcpy((void*)*dSize, &size, sizeof(int), cudaMemcpyHostToDevice); //maybe move this to TransferGPUData?
+	if (cudaStatus != cudaSuccess)
+	{
+		printf("\nCould not copy size variable from host to device\n");
+		return cudaStatus;
+	}
+
+	cudaStatus = cudaMalloc((void**)dStride, sizeof(int));
+	if (cudaStatus != cudaSuccess)
+	{
+		printf("\nCould not allocate device memory for thread stride\n");
+		return cudaStatus;
+	}
+
+	cudaStatus = cudaMemcpy((void*)*dStride, &stride, sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess)
+	{
+		printf("\nCould not copy stride variable from host to device\n");
+		return cudaStatus;
+	}
+
 	return cudaStatus;
 }
 
-cudaError_t TransferGPUData(double** matrices, int size, cudaMemcpyKind flag)
+cudaError_t CudaMemcpyMatrix(double** matrices, int size, cudaMemcpyKind flag)
 {
 	cudaError_t cudaStatus;
 	int to = (flag == 1) + 1, from = (flag == 2) + 1;
