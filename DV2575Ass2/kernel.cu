@@ -32,7 +32,7 @@ int main()
 	double** matrices	= (double**)malloc(4 * sizeof(double*));		//0 CPU, 1 HGPU, 2 DGPU, 3 Backup
 	int size			= 64;											//Number of Rows / Columns, number of elements = size ^ 2 + size
 	int *dSize			= 0;
-	
+
 	for (size; size < 2049; size *= 2) //64, 128, 256, 512, 1024, 2048. 
 	{
 		int failed = 0;
@@ -65,7 +65,7 @@ int main()
 			for (int stride = 1; stride < 9; stride *= 2) //1, 2, 4, 8
 			{
 				int *dStride = 0;
-				int totalStride = stride * ((size / (grid_dim.x * block_dim.x * stride/*Total number of threads, multiplied by the stride*/) + 1);
+				int totalStride = stride * (size / (grid_dim.x * block_dim.x * stride/*Total number of threads, multiplied by the stride*/) + 1);
 				//KERNEL CALL 1, Forward elimination
 				int* dRow = 0;
 				int* dPivotRow = 0;
@@ -162,13 +162,28 @@ void InitCPUData(double** matrices, int size)
 	matrices[0] = (double*)malloc(size * (size + 1) * sizeof(double*));
 	matrices[1] = (double*)malloc(size * (size + 1) * sizeof(double*));
 	matrices[3] = (double*)malloc(size * (size + 1) * sizeof(double*));
-	
+
+	double *s = (double*)malloc(size * sizeof(double));
+
 	for (int i = 0; i < size; ++i)
 	{
 		//fill row
-		for (int j = 0; j < (size + 1); ++j)
+		for (int j = 0; j < size; ++j)
 		{
-			matrices[0][i * (size + 1) + j] = matrices[1][i * (size + 1) + j] = matrices[3][i * (size + 1) + j] =(double)(rand() % 10 + 1); //not allowing zeros b/c easier
+			matrices[0][i * (size + 1) + j] = matrices[1][i * (size + 1) + j] = matrices[3][i * (size + 1) + j] = (double)(rand() % 10 + 1); //not allowing zeros b/c easier
+		}
+
+		s[i] = (double)(rand() % 10 + 1);
+
+		matrices[0][i * (size + 1) + j] = matrices[1][i * (size + 1) + j] = matrices[3][i * (size + 1) + j] = 1;
+	}
+
+	//Filling last column like this to ensure the system is solvable
+	for (int i = 0; i < size; ++i)
+	{
+		for(int j = 0; j < size; ++j)
+		{
+			matrices[0][i * (size + 1) + size] = matrices[1][i * (size + 1) + size] = matrices[3][i * (size + 1) + size] += (s[j] * matrices[0][j]);
 		}
 	}
 }
